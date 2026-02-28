@@ -1,0 +1,80 @@
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: ticket-rush-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      KAFKA_OPTS: "-Xms128m -Xmx128m"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: ticket-rush-kafka
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx256m"
+
+  redis:
+    image: redis:7-alpine
+    container_name: ticket-rush-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+
+  backend:
+    image: ${ECR_REGISTRY}/${BACKEND_IMAGE_REPO}:${BACKEND_IMAGE_TAG}
+    container_name: ticket-rush-backend
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - kafka
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:h2:file:/data/ticketrush;DB_CLOSE_ON_EXIT=FALSE
+      SPRING_DATASOURCE_USERNAME: sa
+      SPRING_DATASOURCE_PASSWORD: ""
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.h2.Driver
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      APP_PAYMENT_PROVIDER: mock
+      APP_CONCERT_LIVE_MODE: websocket
+      APP_PUSH_MODE: websocket
+      APP_DEMO_REBALANCER_ENABLED: "true"
+      APP_SEED_KPOP20_ENABLED: ${APP_SEED_KPOP20_ENABLED}
+      APP_SEED_KPOP20_MARKER_KEY: ${APP_SEED_KPOP20_MARKER_KEY}
+      APP_SEED_KPOP20_PROFILES: local,demo,docker
+      JAVA_TOOL_OPTIONS: "-Xms256m -Xmx512m"
+    volumes:
+      - h2-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/concerts/search?page=0&size=1"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+
+  frontend:
+    image: ${ECR_REGISTRY}/${FRONTEND_IMAGE_REPO}:${FRONTEND_IMAGE_TAG}
+    container_name: ticket-rush-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+
+volumes:
+  redis-data:
+  h2-data:

@@ -1,0 +1,12 @@
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+
+# Env / local files
+*.env
+*.pem
+
+# OS
+.DS_Store

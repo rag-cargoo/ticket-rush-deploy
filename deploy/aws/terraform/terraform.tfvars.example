@@ -1,0 +1,11 @@
+aws_region        = "ap-northeast-2"
+project_name      = "ticket-rush"
+environment       = "dev"
+instance_type     = "t3.small"
+key_name          = ""
+enable_ssh        = false
+allowed_ssh_cidr  = "x.x.x.x/32" # enable_ssh=true 일 때만 사용
+root_volume_size  = 30
+
+# Optional: 이미 생성된 instance profile을 사용할 경우
+# instance_profile_name = "existing-ec2-profile"
