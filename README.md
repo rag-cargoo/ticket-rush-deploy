@@ -22,6 +22,21 @@
    - 선택: SSH mode(키페어 사용)
    - 도메인 기본값: `goopang.shop` (`--app-domain`으로 변경 가능)
 
+## Make Commands
+
+프로젝트 루트(`ticket-rush-deploy`)에서 실행:
+
+```bash
+make infra-apply
+make deploy BACKEND_IMAGE_TAG=<tag> FRONTEND_IMAGE_TAG=<tag>
+```
+
+주요 타겟:
+- `make infra-apply`: Terraform apply(인프라 생성/변경)
+- `make deploy`: SSM 배포(도커컴포즈 pull/up)
+- `make destroy`: Terraform destroy(인프라 삭제)
+- `make deploy-no-seed`: 더미 seed 비활성 배포
+
 ## Notes
 
 - 포트폴리오 저트래픽 기준 단일 인스턴스 구성
