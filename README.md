@@ -11,6 +11,7 @@
 - `deploy/aws/terraform`: EC2/보안그룹/IAM 인프라 코드
 - `deploy/aws/docker-compose/ticket-rush`: EC2 런타임 스택 정의
 - `deploy/aws/scripts`: 원격 배포/롤백 스크립트
+  - `Caddy`를 통해 `80/443` TLS 종단 처리
 
 ## Deployment Flow
 
@@ -19,6 +20,7 @@
 3. 배포 스크립트로 EC2에서 compose pull/up
    - 기본: SSM mode(키페어 불필요)
    - 선택: SSH mode(키페어 사용)
+   - 도메인 기본값: `goopang.shop` (`--app-domain`으로 변경 가능)
 
 ## Notes
 
@@ -26,3 +28,4 @@
 - `APP_SEED_KPOP20_ENABLED`는 기본 `true`로 배포 스크립트에서 전달됨
   - 최초 데이터 생성 이후 `false`로 재배포 권장
 - Terraform 기본값은 `enable_ssh=false`, `key_name=""`로 키페어 없이 배포 가능
+- HTTPS는 DNS 위임 완료 후 Caddy가 자동 인증서 발급/갱신 처리

@@ -72,9 +72,25 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: ticket-rush-caddy
+    restart: unless-stopped
+    depends_on:
+      - frontend
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
 
 volumes:
   redis-data:
   h2-data:
+  caddy-data:
+  caddy-config:

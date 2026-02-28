@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_DIR="${SCRIPT_DIR}/../docker-compose/ticket-rush"
 COMPOSE_FILE="${COMPOSE_DIR}/docker-compose.ec2.yml"
+CADDY_FILE="${COMPOSE_DIR}/Caddyfile"
 
 HOST=""
 KEY_PATH=""
@@ -18,6 +19,7 @@ FRONTEND_TAG=""
 REMOTE_DIR="/opt/ticket-rush"
 SEED_ENABLED="true"
 SEED_MARKER_KEY="kpop20_seed_marker_v1"
+APP_DOMAIN="goopang.shop"
 
 usage() {
   cat <<USAGE
@@ -37,6 +39,7 @@ Options:
   --remote-dir <PATH>              (default: /opt/ticket-rush)
   --seed-enabled <true|false>      (default: true)
   --seed-marker-key <KEY>          (default: kpop20_seed_marker_v1)
+  --app-domain <DOMAIN>            (default: goopang.shop)
 USAGE
 }
 
@@ -55,6 +58,7 @@ while [[ $# -gt 0 ]]; do
     --remote-dir) REMOTE_DIR="$2"; shift 2 ;;
     --seed-enabled) SEED_ENABLED="$2"; shift 2 ;;
     --seed-marker-key) SEED_MARKER_KEY="$2"; shift 2 ;;
+    --app-domain) APP_DOMAIN="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown arg: $1"; usage; exit 1 ;;
   esac
@@ -98,6 +102,7 @@ FRONTEND_IMAGE_REPO=${FRONTEND_REPO}
 FRONTEND_IMAGE_TAG=${FRONTEND_TAG}
 APP_SEED_KPOP20_ENABLED=${SEED_ENABLED}
 APP_SEED_KPOP20_MARKER_KEY=${SEED_MARKER_KEY}
+APP_DOMAIN=${APP_DOMAIN}
 ENV
 
 deploy_via_ssh() {
@@ -105,6 +110,7 @@ deploy_via_ssh() {
 
   ssh "${SSH_OPTS[@]}" "${SSH_USER}@${HOST}" "mkdir -p ${REMOTE_DIR}"
   scp "${SSH_OPTS[@]}" "${COMPOSE_FILE}" "${SSH_USER}@${HOST}:${REMOTE_DIR}/docker-compose.ec2.yml"
+  scp "${SSH_OPTS[@]}" "${CADDY_FILE}" "${SSH_USER}@${HOST}:${REMOTE_DIR}/Caddyfile"
   scp "${SSH_OPTS[@]}" "${TMP_ENV}" "${SSH_USER}@${HOST}:${REMOTE_DIR}/.env"
 
   ssh "${SSH_OPTS[@]}" "${SSH_USER}@${HOST}" bash -s <<REMOTE
@@ -126,6 +132,7 @@ deploy_via_ssm() {
   fi
 
   COMPOSE_B64="$(base64 -w0 "${COMPOSE_FILE}")"
+  CADDY_B64="$(base64 -w0 "${CADDY_FILE}")"
   ENV_B64="$(base64 -w0 "${TMP_ENV}")"
 
   cat > "${TMP_REMOTE_SCRIPT}" <<REMOTE_SCRIPT
@@ -134,6 +141,9 @@ set -euo pipefail
 mkdir -p "${REMOTE_DIR}"
 cat <<'EOF' | base64 -d > "${REMOTE_DIR}/docker-compose.ec2.yml"
 ${COMPOSE_B64}
+EOF
+cat <<'EOF' | base64 -d > "${REMOTE_DIR}/Caddyfile"
+${CADDY_B64}
 EOF
 cat <<'EOF' | base64 -d > "${REMOTE_DIR}/.env"
 ${ENV_B64}

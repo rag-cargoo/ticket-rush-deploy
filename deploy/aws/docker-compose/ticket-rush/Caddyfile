@@ -1,0 +1,12 @@
+{
+  email devnull@goopang.shop
+}
+
+{$APP_DOMAIN} {
+  encode zstd gzip
+  reverse_proxy frontend:80
+}
+
+www.{$APP_DOMAIN} {
+  redir https://{$APP_DOMAIN}{uri} permanent
+}
