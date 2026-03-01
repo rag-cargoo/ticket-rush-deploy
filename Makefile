@@ -17,6 +17,17 @@ FRONTEND_IMAGE_TAG ?= latest
 APP_DOMAIN ?= goopang.shop
 SEED_ENABLED ?= true
 SEED_MARKER_KEY ?= kpop20_seed_marker_v1
+FRONTEND_ALLOWED_ORIGINS ?=
+U1_CALLBACK_URL ?=
+
+KAKAO_CLIENT_ID ?=
+KAKAO_CLIENT_SECRET ?=
+KAKAO_REDIRECT_URI ?=
+
+NAVER_CLIENT_ID ?=
+NAVER_CLIENT_SECRET ?=
+NAVER_REDIRECT_URI ?=
+NAVER_SERVICE_URL ?=
 
 INSTANCE_ID ?= $(shell terraform -chdir=$(TF_DIR) output -raw instance_id 2>/dev/null || true)
 
@@ -38,6 +49,10 @@ help:
 	@echo "  FRONTEND_IMAGE_TAG=$(FRONTEND_IMAGE_TAG)"
 	@echo "  APP_DOMAIN=$(APP_DOMAIN)"
 	@echo "  SEED_ENABLED=$(SEED_ENABLED)"
+	@echo "  KAKAO_CLIENT_ID=<required>"
+	@echo "  KAKAO_CLIENT_SECRET=<required>"
+	@echo "  NAVER_CLIENT_ID=<required>"
+	@echo "  NAVER_CLIENT_SECRET=<required>"
 
 tf-init:
 	terraform -chdir=$(TF_DIR) init
@@ -73,7 +88,16 @@ deploy:
 		--frontend-tag $(FRONTEND_IMAGE_TAG) \
 		--seed-enabled $(SEED_ENABLED) \
 		--seed-marker-key $(SEED_MARKER_KEY) \
-		--app-domain $(APP_DOMAIN)
+		--app-domain $(APP_DOMAIN) \
+		--frontend-allowed-origins "$(FRONTEND_ALLOWED_ORIGINS)" \
+		--u1-callback-url "$(U1_CALLBACK_URL)" \
+		--kakao-client-id "$(KAKAO_CLIENT_ID)" \
+		--kakao-client-secret "$(KAKAO_CLIENT_SECRET)" \
+		--kakao-redirect-uri "$(KAKAO_REDIRECT_URI)" \
+		--naver-client-id "$(NAVER_CLIENT_ID)" \
+		--naver-client-secret "$(NAVER_CLIENT_SECRET)" \
+		--naver-redirect-uri "$(NAVER_REDIRECT_URI)" \
+		--naver-service-url "$(NAVER_SERVICE_URL)"
 
 deploy-no-seed:
 	$(MAKE) deploy SEED_ENABLED=false

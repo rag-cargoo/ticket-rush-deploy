@@ -31,6 +31,19 @@ make infra-apply
 make deploy BACKEND_IMAGE_TAG=<tag> FRONTEND_IMAGE_TAG=<tag>
 ```
 
+OAuth까지 포함한 배포 예시:
+
+```bash
+make deploy \
+  BACKEND_IMAGE_TAG=<tag> \
+  FRONTEND_IMAGE_TAG=<tag> \
+  APP_DOMAIN=goopang.shop \
+  KAKAO_CLIENT_ID=<kakao-client-id> \
+  KAKAO_CLIENT_SECRET=<kakao-client-secret> \
+  NAVER_CLIENT_ID=<naver-client-id> \
+  NAVER_CLIENT_SECRET=<naver-client-secret>
+```
+
 주요 타겟:
 - `make infra-apply`: Terraform apply(인프라 생성/변경)
 - `make deploy`: SSM 배포(도커컴포즈 pull/up)
@@ -44,3 +57,8 @@ make deploy BACKEND_IMAGE_TAG=<tag> FRONTEND_IMAGE_TAG=<tag>
   - 최초 데이터 생성 이후 `false`로 재배포 권장
 - Terraform 기본값은 `enable_ssh=false`, `key_name=""`로 키페어 없이 배포 가능
 - HTTPS는 DNS 위임 완료 후 Caddy가 자동 인증서 발급/갱신 처리
+- 소셜 로그인 운영값은 배포 시 함께 전달해야 함
+  - `KAKAO_REDIRECT_URI=https://goopang.shop/login/oauth2/code/kakao`
+  - `NAVER_REDIRECT_URI=https://goopang.shop/login/oauth2/code/naver`
+  - `U1_CALLBACK_URL=https://goopang.shop/ux/u1/callback.html`
+  - `FRONTEND_ALLOWED_ORIGINS=https://goopang.shop,https://www.goopang.shop`

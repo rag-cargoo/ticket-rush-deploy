@@ -20,6 +20,17 @@ REMOTE_DIR="/opt/ticket-rush"
 SEED_ENABLED="true"
 SEED_MARKER_KEY="kpop20_seed_marker_v1"
 APP_DOMAIN="goopang.shop"
+FRONTEND_ALLOWED_ORIGINS=""
+U1_CALLBACK_URL=""
+
+KAKAO_CLIENT_ID=""
+KAKAO_CLIENT_SECRET=""
+KAKAO_REDIRECT_URI=""
+
+NAVER_CLIENT_ID=""
+NAVER_CLIENT_SECRET=""
+NAVER_REDIRECT_URI=""
+NAVER_SERVICE_URL=""
 
 usage() {
   cat <<USAGE
@@ -40,6 +51,17 @@ Options:
   --seed-enabled <true|false>      (default: true)
   --seed-marker-key <KEY>          (default: kpop20_seed_marker_v1)
   --app-domain <DOMAIN>            (default: goopang.shop)
+  --frontend-allowed-origins <CSV> (default: https://<domain>,https://www.<domain>,http://localhost:8080,http://127.0.0.1:8080)
+  --u1-callback-url <URL>          (default: https://<domain>/ux/u1/callback.html)
+
+  --kakao-client-id <VALUE>
+  --kakao-client-secret <VALUE>
+  --kakao-redirect-uri <URL>       (default: https://<domain>/login/oauth2/code/kakao)
+
+  --naver-client-id <VALUE>
+  --naver-client-secret <VALUE>
+  --naver-redirect-uri <URL>       (default: https://<domain>/login/oauth2/code/naver)
+  --naver-service-url <URL>        (default: https://<domain>)
 USAGE
 }
 
@@ -59,6 +81,15 @@ while [[ $# -gt 0 ]]; do
     --seed-enabled) SEED_ENABLED="$2"; shift 2 ;;
     --seed-marker-key) SEED_MARKER_KEY="$2"; shift 2 ;;
     --app-domain) APP_DOMAIN="$2"; shift 2 ;;
+    --frontend-allowed-origins) FRONTEND_ALLOWED_ORIGINS="$2"; shift 2 ;;
+    --u1-callback-url) U1_CALLBACK_URL="$2"; shift 2 ;;
+    --kakao-client-id) KAKAO_CLIENT_ID="$2"; shift 2 ;;
+    --kakao-client-secret) KAKAO_CLIENT_SECRET="$2"; shift 2 ;;
+    --kakao-redirect-uri) KAKAO_REDIRECT_URI="$2"; shift 2 ;;
+    --naver-client-id) NAVER_CLIENT_ID="$2"; shift 2 ;;
+    --naver-client-secret) NAVER_CLIENT_SECRET="$2"; shift 2 ;;
+    --naver-redirect-uri) NAVER_REDIRECT_URI="$2"; shift 2 ;;
+    --naver-service-url) NAVER_SERVICE_URL="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown arg: $1"; usage; exit 1 ;;
   esac
@@ -93,6 +124,30 @@ TMP_ENV="$(mktemp)"
 TMP_REMOTE_SCRIPT="$(mktemp)"
 trap 'rm -f "${TMP_ENV}" "${TMP_REMOTE_SCRIPT}"' EXIT
 
+if [[ -z "${FRONTEND_ALLOWED_ORIGINS}" ]]; then
+  FRONTEND_ALLOWED_ORIGINS="https://${APP_DOMAIN},https://www.${APP_DOMAIN},http://localhost:8080,http://127.0.0.1:8080"
+fi
+
+if [[ -z "${U1_CALLBACK_URL}" ]]; then
+  U1_CALLBACK_URL="https://${APP_DOMAIN}/ux/u1/callback.html"
+fi
+
+if [[ -z "${KAKAO_REDIRECT_URI}" ]]; then
+  KAKAO_REDIRECT_URI="https://${APP_DOMAIN}/login/oauth2/code/kakao"
+fi
+
+if [[ -z "${NAVER_REDIRECT_URI}" ]]; then
+  NAVER_REDIRECT_URI="https://${APP_DOMAIN}/login/oauth2/code/naver"
+fi
+
+if [[ -z "${NAVER_SERVICE_URL}" ]]; then
+  NAVER_SERVICE_URL="https://${APP_DOMAIN}"
+fi
+
+if [[ -z "${KAKAO_CLIENT_ID}" || -z "${KAKAO_CLIENT_SECRET}" || -z "${NAVER_CLIENT_ID}" || -z "${NAVER_CLIENT_SECRET}" ]]; then
+  echo "[WARN] OAuth client env is incomplete. social login will fail until KAKAO_*/NAVER_* values are provided." >&2
+fi
+
 cat > "${TMP_ENV}" <<ENV
 AWS_REGION=${AWS_REGION}
 ECR_REGISTRY=${ECR_REGISTRY}
@@ -103,6 +158,15 @@ FRONTEND_IMAGE_TAG=${FRONTEND_TAG}
 APP_SEED_KPOP20_ENABLED=${SEED_ENABLED}
 APP_SEED_KPOP20_MARKER_KEY=${SEED_MARKER_KEY}
 APP_DOMAIN=${APP_DOMAIN}
+FRONTEND_ALLOWED_ORIGINS=${FRONTEND_ALLOWED_ORIGINS}
+U1_CALLBACK_URL=${U1_CALLBACK_URL}
+KAKAO_CLIENT_ID=${KAKAO_CLIENT_ID}
+KAKAO_CLIENT_SECRET=${KAKAO_CLIENT_SECRET}
+KAKAO_REDIRECT_URI=${KAKAO_REDIRECT_URI}
+NAVER_CLIENT_ID=${NAVER_CLIENT_ID}
+NAVER_CLIENT_SECRET=${NAVER_CLIENT_SECRET}
+NAVER_REDIRECT_URI=${NAVER_REDIRECT_URI}
+NAVER_SERVICE_URL=${NAVER_SERVICE_URL}
 ENV
 
 deploy_via_ssh() {
