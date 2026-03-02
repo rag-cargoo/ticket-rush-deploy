@@ -145,7 +145,7 @@ if [[ -z "${NAVER_SERVICE_URL}" ]]; then
 fi
 
 if [[ -z "${KAKAO_CLIENT_ID}" || -z "${KAKAO_CLIENT_SECRET}" || -z "${NAVER_CLIENT_ID}" || -z "${NAVER_CLIENT_SECRET}" ]]; then
-  echo "[WARN] OAuth client env is incomplete. social login will fail until KAKAO_*/NAVER_* values are provided." >&2
+  echo "[WARN] OAuth client env is incomplete. deploy will try to preserve existing remote KAKAO_*/NAVER_* values." >&2
 fi
 
 cat > "${TMP_ENV}" <<ENV
@@ -175,10 +175,78 @@ deploy_via_ssh() {
   ssh "${SSH_OPTS[@]}" "${SSH_USER}@${HOST}" "mkdir -p ${REMOTE_DIR}"
   scp "${SSH_OPTS[@]}" "${COMPOSE_FILE}" "${SSH_USER}@${HOST}:${REMOTE_DIR}/docker-compose.ec2.yml"
   scp "${SSH_OPTS[@]}" "${CADDY_FILE}" "${SSH_USER}@${HOST}:${REMOTE_DIR}/Caddyfile"
-  scp "${SSH_OPTS[@]}" "${TMP_ENV}" "${SSH_USER}@${HOST}:${REMOTE_DIR}/.env"
+  scp "${SSH_OPTS[@]}" "${TMP_ENV}" "${SSH_USER}@${HOST}:${REMOTE_DIR}/.env.new"
 
   ssh "${SSH_OPTS[@]}" "${SSH_USER}@${HOST}" bash -s <<REMOTE
 set -euo pipefail
+
+read_env_value() {
+  local file="\$1"
+  local key="\$2"
+  if [[ ! -f "\${file}" ]]; then
+    return 0
+  fi
+  awk -F= -v key="\${key}" '
+    \$1 == key {
+      print substr(\$0, index(\$0, "=") + 1)
+      exit
+    }
+  ' "\${file}"
+}
+
+upsert_env_value() {
+  local file="\$1"
+  local key="\$2"
+  local value="\$3"
+  awk -v key="\${key}" -v value="\${value}" '
+    BEGIN { found = 0 }
+    \$0 ~ ("^" key "=") {
+      print key "=" value
+      found = 1
+      next
+    }
+    { print }
+    END {
+      if (!found) {
+        print key "=" value
+      }
+    }
+  ' "\${file}" > "\${file}.tmp"
+  mv "\${file}.tmp" "\${file}"
+}
+
+merge_oauth_env() {
+  local incoming_file="${REMOTE_DIR}/.env.new"
+  local existing_file="${REMOTE_DIR}/.env"
+  local merged_file="${REMOTE_DIR}/.env"
+  local keys=(KAKAO_CLIENT_ID KAKAO_CLIENT_SECRET NAVER_CLIENT_ID NAVER_CLIENT_SECRET)
+  local fallback_count=0
+  local missing_keys=()
+
+  cp "\${incoming_file}" "\${merged_file}"
+  for key in "\${keys[@]}"; do
+    local incoming_value existing_value merged_value
+    incoming_value="\$(read_env_value "\${incoming_file}" "\${key}")"
+    existing_value="\$(read_env_value "\${existing_file}" "\${key}")"
+    merged_value="\${incoming_value}"
+    if [[ -z "\${merged_value}" && -n "\${existing_value}" ]]; then
+      merged_value="\${existing_value}"
+      fallback_count=\$((fallback_count + 1))
+    fi
+    upsert_env_value "\${merged_file}" "\${key}" "\${merged_value}"
+    if [[ -z "\${merged_value}" ]]; then
+      missing_keys+=("\${key}")
+    fi
+  done
+
+  rm -f "\${incoming_file}"
+  if (( fallback_count > 0 )); then
+    echo "[INFO] preserved remote OAuth values from existing .env (fallback_count=\${fallback_count})"
+  fi
+  if (( \${#missing_keys[@]} > 0 )); then
+    echo "[WARN] missing OAuth values after merge: \${missing_keys[*]}" >&2
+  fi
+}
 
 wait_for_backend_healthy() {
   local max_attempts=90
@@ -227,6 +295,7 @@ wait_for_frontend_api_proxy() {
 }
 
 cd "${REMOTE_DIR}"
+merge_oauth_env
 aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
 docker compose --env-file .env -f docker-compose.ec2.yml pull
 docker compose --env-file .env -f docker-compose.ec2.yml up -d
@@ -305,10 +374,76 @@ EOF
 cat <<'EOF' | base64 -d > "${REMOTE_DIR}/Caddyfile"
 ${CADDY_B64}
 EOF
-cat <<'EOF' | base64 -d > "${REMOTE_DIR}/.env"
+cat <<'EOF' | base64 -d > "${REMOTE_DIR}/.env.new"
 ${ENV_B64}
 EOF
+read_env_value() {
+  local file="\$1"
+  local key="\$2"
+  if [[ ! -f "\${file}" ]]; then
+    return 0
+  fi
+  awk -F= -v key="\${key}" '
+    \$1 == key {
+      print substr(\$0, index(\$0, "=") + 1)
+      exit
+    }
+  ' "\${file}"
+}
+upsert_env_value() {
+  local file="\$1"
+  local key="\$2"
+  local value="\$3"
+  awk -v key="\${key}" -v value="\${value}" '
+    BEGIN { found = 0 }
+    \$0 ~ ("^" key "=") {
+      print key "=" value
+      found = 1
+      next
+    }
+    { print }
+    END {
+      if (!found) {
+        print key "=" value
+      }
+    }
+  ' "\${file}" > "\${file}.tmp"
+  mv "\${file}.tmp" "\${file}"
+}
+merge_oauth_env() {
+  local incoming_file="${REMOTE_DIR}/.env.new"
+  local existing_file="${REMOTE_DIR}/.env"
+  local merged_file="${REMOTE_DIR}/.env"
+  local keys=(KAKAO_CLIENT_ID KAKAO_CLIENT_SECRET NAVER_CLIENT_ID NAVER_CLIENT_SECRET)
+  local fallback_count=0
+  local missing_keys=()
+
+  cp "\${incoming_file}" "\${merged_file}"
+  for key in "\${keys[@]}"; do
+    local incoming_value existing_value merged_value
+    incoming_value="\$(read_env_value "\${incoming_file}" "\${key}")"
+    existing_value="\$(read_env_value "\${existing_file}" "\${key}")"
+    merged_value="\${incoming_value}"
+    if [[ -z "\${merged_value}" && -n "\${existing_value}" ]]; then
+      merged_value="\${existing_value}"
+      fallback_count=\$((fallback_count + 1))
+    fi
+    upsert_env_value "\${merged_file}" "\${key}" "\${merged_value}"
+    if [[ -z "\${merged_value}" ]]; then
+      missing_keys+=("\${key}")
+    fi
+  done
+
+  rm -f "\${incoming_file}"
+  if (( fallback_count > 0 )); then
+    echo "[INFO] preserved remote OAuth values from existing .env (fallback_count=\${fallback_count})"
+  fi
+  if (( \${#missing_keys[@]} > 0 )); then
+    echo "[WARN] missing OAuth values after merge: \${missing_keys[*]}" >&2
+  fi
+}
 cd "${REMOTE_DIR}"
+merge_oauth_env
 aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
 docker compose --env-file .env -f docker-compose.ec2.yml pull
 docker compose --env-file .env -f docker-compose.ec2.yml up -d
