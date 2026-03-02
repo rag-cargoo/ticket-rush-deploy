@@ -179,10 +179,59 @@ deploy_via_ssh() {
 
   ssh "${SSH_OPTS[@]}" "${SSH_USER}@${HOST}" bash -s <<REMOTE
 set -euo pipefail
+
+wait_for_backend_healthy() {
+  local max_attempts=90
+  local sleep_secs=2
+  local status=""
+
+  for _ in \$(seq 1 "\${max_attempts}"); do
+    status="\$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' ticket-rush-backend 2>/dev/null || true)"
+    case "\${status}" in
+      healthy)
+        echo "[OK] backend healthcheck passed"
+        return 0
+        ;;
+      unhealthy)
+        echo "[ERROR] backend healthcheck is unhealthy" >&2
+        docker logs --tail 120 ticket-rush-backend || true
+        return 1
+        ;;
+      *)
+        ;;
+    esac
+    sleep "\${sleep_secs}"
+  done
+
+  echo "[ERROR] backend healthcheck timeout after \$((max_attempts * sleep_secs))s (last_status=\${status:-unknown})" >&2
+  docker logs --tail 120 ticket-rush-backend || true
+  return 1
+}
+
+wait_for_frontend_api_proxy() {
+  local max_attempts=60
+  local sleep_secs=2
+
+  for _ in \$(seq 1 "\${max_attempts}"); do
+    if docker exec ticket-rush-frontend wget -qO- "http://127.0.0.1/api/concerts/search?page=0&size=1" >/dev/null 2>&1; then
+      echo "[OK] frontend /api proxy probe passed"
+      return 0
+    fi
+    sleep "\${sleep_secs}"
+  done
+
+  echo "[ERROR] frontend /api proxy probe timeout after \$((max_attempts * sleep_secs))s" >&2
+  docker logs --tail 120 ticket-rush-frontend || true
+  docker logs --tail 120 ticket-rush-backend || true
+  return 1
+}
+
 cd "${REMOTE_DIR}"
 aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
 docker compose --env-file .env -f docker-compose.ec2.yml pull
 docker compose --env-file .env -f docker-compose.ec2.yml up -d
+wait_for_backend_healthy
+wait_for_frontend_api_proxy
 docker compose --env-file .env -f docker-compose.ec2.yml ps
 REMOTE
 
@@ -202,6 +251,53 @@ deploy_via_ssm() {
   cat > "${TMP_REMOTE_SCRIPT}" <<REMOTE_SCRIPT
 #!/usr/bin/env bash
 set -euo pipefail
+
+wait_for_backend_healthy() {
+  local max_attempts=90
+  local sleep_secs=2
+  local status=""
+
+  for _ in \$(seq 1 "\${max_attempts}"); do
+    status="\$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' ticket-rush-backend 2>/dev/null || true)"
+    case "\${status}" in
+      healthy)
+        echo "[OK] backend healthcheck passed"
+        return 0
+        ;;
+      unhealthy)
+        echo "[ERROR] backend healthcheck is unhealthy" >&2
+        docker logs --tail 120 ticket-rush-backend || true
+        return 1
+        ;;
+      *)
+        ;;
+    esac
+    sleep "\${sleep_secs}"
+  done
+
+  echo "[ERROR] backend healthcheck timeout after \$((max_attempts * sleep_secs))s (last_status=\${status:-unknown})" >&2
+  docker logs --tail 120 ticket-rush-backend || true
+  return 1
+}
+
+wait_for_frontend_api_proxy() {
+  local max_attempts=60
+  local sleep_secs=2
+
+  for _ in \$(seq 1 "\${max_attempts}"); do
+    if docker exec ticket-rush-frontend wget -qO- "http://127.0.0.1/api/concerts/search?page=0&size=1" >/dev/null 2>&1; then
+      echo "[OK] frontend /api proxy probe passed"
+      return 0
+    fi
+    sleep "\${sleep_secs}"
+  done
+
+  echo "[ERROR] frontend /api proxy probe timeout after \$((max_attempts * sleep_secs))s" >&2
+  docker logs --tail 120 ticket-rush-frontend || true
+  docker logs --tail 120 ticket-rush-backend || true
+  return 1
+}
+
 mkdir -p "${REMOTE_DIR}"
 cat <<'EOF' | base64 -d > "${REMOTE_DIR}/docker-compose.ec2.yml"
 ${COMPOSE_B64}
@@ -216,6 +312,8 @@ cd "${REMOTE_DIR}"
 aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
 docker compose --env-file .env -f docker-compose.ec2.yml pull
 docker compose --env-file .env -f docker-compose.ec2.yml up -d
+wait_for_backend_healthy
+wait_for_frontend_api_proxy
 docker compose --env-file .env -f docker-compose.ec2.yml ps
 REMOTE_SCRIPT
 
