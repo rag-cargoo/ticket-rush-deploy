@@ -218,16 +218,22 @@ upsert_env_value() {
 merge_oauth_env() {
   local incoming_file="${REMOTE_DIR}/.env.new"
   local existing_file="${REMOTE_DIR}/.env"
+  local existing_snapshot_file="${REMOTE_DIR}/.env.existing"
   local merged_file="${REMOTE_DIR}/.env"
   local keys=(KAKAO_CLIENT_ID KAKAO_CLIENT_SECRET NAVER_CLIENT_ID NAVER_CLIENT_SECRET)
   local fallback_count=0
   local missing_keys=()
 
+  if [[ -f "\${existing_file}" ]]; then
+    cp "\${existing_file}" "\${existing_snapshot_file}"
+  else
+    : > "\${existing_snapshot_file}"
+  fi
   cp "\${incoming_file}" "\${merged_file}"
   for key in "\${keys[@]}"; do
     local incoming_value existing_value merged_value
     incoming_value="\$(read_env_value "\${incoming_file}" "\${key}")"
-    existing_value="\$(read_env_value "\${existing_file}" "\${key}")"
+    existing_value="\$(read_env_value "\${existing_snapshot_file}" "\${key}")"
     merged_value="\${incoming_value}"
     if [[ -z "\${merged_value}" && -n "\${existing_value}" ]]; then
       merged_value="\${existing_value}"
@@ -240,6 +246,7 @@ merge_oauth_env() {
   done
 
   rm -f "\${incoming_file}"
+  rm -f "\${existing_snapshot_file}"
   if (( fallback_count > 0 )); then
     echo "[INFO] preserved remote OAuth values from existing .env (fallback_count=\${fallback_count})"
   fi
@@ -413,16 +420,22 @@ upsert_env_value() {
 merge_oauth_env() {
   local incoming_file="${REMOTE_DIR}/.env.new"
   local existing_file="${REMOTE_DIR}/.env"
+  local existing_snapshot_file="${REMOTE_DIR}/.env.existing"
   local merged_file="${REMOTE_DIR}/.env"
   local keys=(KAKAO_CLIENT_ID KAKAO_CLIENT_SECRET NAVER_CLIENT_ID NAVER_CLIENT_SECRET)
   local fallback_count=0
   local missing_keys=()
 
+  if [[ -f "\${existing_file}" ]]; then
+    cp "\${existing_file}" "\${existing_snapshot_file}"
+  else
+    : > "\${existing_snapshot_file}"
+  fi
   cp "\${incoming_file}" "\${merged_file}"
   for key in "\${keys[@]}"; do
     local incoming_value existing_value merged_value
     incoming_value="\$(read_env_value "\${incoming_file}" "\${key}")"
-    existing_value="\$(read_env_value "\${existing_file}" "\${key}")"
+    existing_value="\$(read_env_value "\${existing_snapshot_file}" "\${key}")"
     merged_value="\${incoming_value}"
     if [[ -z "\${merged_value}" && -n "\${existing_value}" ]]; then
       merged_value="\${existing_value}"
@@ -435,6 +448,7 @@ merge_oauth_env() {
   done
 
   rm -f "\${incoming_file}"
+  rm -f "\${existing_snapshot_file}"
   if (( fallback_count > 0 )); then
     echo "[INFO] preserved remote OAuth values from existing .env (fallback_count=\${fallback_count})"
   fi
